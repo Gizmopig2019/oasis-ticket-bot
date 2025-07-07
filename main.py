@@ -1,16 +1,14 @@
+import os
 import requests
 from bs4 import BeautifulSoup
 import time
-from keep_alive import keep_alive
 import urllib.parse
 from urllib.parse import urlparse, urlunparse
 
-# --- YOUR TELEGRAM BOT TOKEN AND CHAT ID ---
-BOT_TOKEN = "8102701244:AAEvDMpJ_OqWwtJMBRE-zjksT3r7vL3V1fw"
-CHAT_ID = 5144724524
-
-# --- YOUR SCRAPINGBEE API KEY ---
-SCRAPINGBEE_API_KEY = "QY4CXL58X3ICVSJFHWUPXURWDZJN6I9Y06Y6X17YTY0HGMYOFKMJQ8REPFAXSHUPS6M7HACEHEKKTZ7F"  # 🔁 Replace this with your real key
+# --- LOAD TOKENS FROM ENVIRONMENT VARIABLES ---
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+CHAT_ID = int(os.getenv("CHAT_ID"))
+SCRAPINGBEE_API_KEY = os.getenv("SCRAPINGBEE_API_KEY")
 
 # --- TWICKETS EVENT URLS ---
 TWICKETS_URLS = [
@@ -86,7 +84,6 @@ def check_twickets_url(url, retries=3):
 
 # --- MAIN LOOP ---
 if __name__ == "__main__":
-    keep_alive()
     send_telegram_message("✅ Twickets bot is now running and checking every 5 minutes!")
 
     while True:
