@@ -26,23 +26,36 @@ except ValueError:
     print("ERROR: CHAT_ID must be an integer. Exiting.")
     sys.exit(1)
 
+# --- TWICKETS EVENT URLS ---
 TWICKETS_URLS = [
     "https://www.twickets.live/en/event/1828748649929117696#sort=FirstListed&typeFilter=Any&qFilter=All",
     "https://www.twickets.live/en/event/1828748567179698176#sort=FirstListed&typeFilter=Any&qFilter=All",
     "https://www.twickets.live/en/event/1828444850157002752#sort=FirstListed&typeFilter=Any&qFilter=All",
 ]
 
+# --- CHECK INTERVAL IN SECONDS ---
 CHECK_INTERVAL = 300  # 5 minutes
 
-def send_telegram_message(text):
-    api_url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
-    data = {"chat_id": CHAT_ID, "text": text}
+def send_telegram_message(text, markdown=False):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    data = {
+        "chat_id": CHAT_ID,
+        "text": text,
+    }
+    if markdown:
+        data["parse_mode"] = "MarkdownV2"
     try:
-        response = requests.post(api_url, data=data)
+        response = requests.post(url, data=data)
         if response.status_code != 200:
             print(f"Failed to send message: {response.text}")
     except Exception as e:
         print(f"Error sending Telegram message: {e}")
+
+def escape_md(text):
+    escape_chars = r"\_*[]()~`>#+-=|{}.!"
+    for ch in escape_chars:
+        text = text.replace(ch, "\\" + ch)
+    return text
 
 def clean_url(url):
     parsed = urlparse(url)
@@ -69,25 +82,27 @@ def check_twickets_url(url, retries=3):
             soup = BeautifulSoup(response.text, "html.parser")
             prices = soup.find_all("span", class_="TicketCard__price___3Oxo2")
 
-            valid_prices = []
+            count = 0
             for price_tag in prices:
                 price_text = price_tag.get_text(strip=True)
                 if price_text.startswith("£"):
                     price_num = int(price_text.replace("£", "").replace(",", ""))
                     if price_num <= 250:
-                        valid_prices.append(price_text)
+                        count += 1
 
-            if valid_prices:
-                count = len(valid_prices)
-                price_summary = ", ".join(valid_prices[:3])
-                more_text = "..." if count > 3 else ""
+            if count > 0:
                 plural = "tickets" if count > 1 else "ticket"
-                message = f"{count}x {plural} found on Twickets at prices: {price_summary}{more_text}\n{cleaned_url}"
-                print(f"Found tickets: {message}")
-                return message  # Return message instead of sending here, so caller controls sending
+                price_sample = prices[0].get_text(strip=True)
+                message = (
+                    f"🎟️ *{count}x {plural} found for {escape_md(price_sample)}!*\n"
+                    f"[Click here to view tickets]({escape_md(cleaned_url)})"
+                )
+                send_telegram_message(message, markdown=True)
+                print(f"Alert sent for {count}x ticket(s) at {cleaned_url}")
+                return True
 
             print("No tickets under £250 found at this URL.")
-            return None
+            return False
 
         except requests.exceptions.HTTPError as http_err:
             if response.status_code == 500 and attempt < retries - 1:
@@ -95,39 +110,38 @@ def check_twickets_url(url, retries=3):
                 time.sleep(10)
             else:
                 print(f"HTTP error: {http_err}")
-                return None
+                return False
         except Exception as e:
             print(f"General error checking Twickets: {e}")
-            return None
+            return False
 
 if __name__ == "__main__":
     send_telegram_message("✅ Twickets bot is now running and checking every 5 minutes!")
 
-    tickets_found_messages = []
-    last_reported_hour = None
+    last_hour = -1
+    ticket_found_this_hour = False
 
     while True:
-        now = datetime.now()
+        now = datetime.utcnow()
         current_hour = now.hour
         current_minute = now.minute
 
-        # Check all URLs and gather messages if tickets found
+        if current_hour != last_hour:
+            ticket_found_this_hour = False
+            last_hour = current_hour
+
+        any_found = False
         for url in TWICKETS_URLS:
-            msg = check_twickets_url(url)
-            if msg:
-                tickets_found_messages.append(msg)
+            if check_twickets_url(url):
+                any_found = True
+                ticket_found_this_hour = True
 
-        # Send immediate alert for any new tickets found this round
-        for message in tickets_found_messages:
-            send_telegram_message(message)
-        tickets_found_messages.clear()
+        if not any_found:
+            print("No tickets under £250 found at any monitored URLs.")
 
-        # At exactly minute 0 of any hour, send summary message
-        if current_minute == 0 and last_reported_hour != current_hour:
-            last_reported_hour = current_hour
-
-            # If tickets were found in the previous hour, report them
-            # Since we cleared after sending immediate alerts, here we just say no tickets
-            send_telegram_message("No tickets found, I'll keep searching.")
+        # Send message at the top of the hour if no tickets found
+        if current_minute == 0 and not ticket_found_this_hour:
+            send_telegram_message("❌ No tickets found, I'll keep searching.")
+            print("Sent hourly status: No tickets found.")
 
         time.sleep(CHECK_INTERVAL)
