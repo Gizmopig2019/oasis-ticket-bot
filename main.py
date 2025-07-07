@@ -1,4 +1,5 @@
 import os
+import sys
 import requests
 from bs4 import BeautifulSoup
 import time
@@ -7,12 +8,24 @@ from urllib.parse import urlparse, urlunparse
 
 # --- LOAD TOKENS FROM ENVIRONMENT VARIABLES ---
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-CHAT_ID = int(os.getenv("CHAT_ID"))
-SCRAPINGBEE_API_KEY = os.getenv("QY4CXL58X3ICVSJFHWUPXURWDZJN6I9Y06Y6X17YTY0HGMYOFKMJQ8REPFAXSHUPS6M7HACEHEKKTZ7F")
+CHAT_ID_ENV = os.getenv("CHAT_ID")
+SCRAPINGBEE_API_KEY = os.getenv("SCRAPINGBEE_API_KEY")
 
-print("BOT_TOKEN:", BOT_TOKEN)
-print("CHAT_ID:", CHAT_ID)
-print("SCRAPINGBEE_API_KEY:", SCRAPINGBEE_API_KEY)
+# --- DEBUG PRINT ENV VARS ---
+print(f"BOT_TOKEN: {'SET' if BOT_TOKEN else 'NOT SET'}")
+print(f"CHAT_ID: {CHAT_ID_ENV if CHAT_ID_ENV else 'NOT SET'}")
+print(f"SCRAPINGBEE_API_KEY: {'SET' if SCRAPINGBEE_API_KEY else 'NOT SET'}")
+
+# --- CHECK REQUIRED VARIABLES ---
+if not BOT_TOKEN or not CHAT_ID_ENV or not SCRAPINGBEE_API_KEY:
+    print("ERROR: One or more required environment variables are missing. Exiting.")
+    sys.exit(1)
+
+try:
+    CHAT_ID = int(CHAT_ID_ENV)
+except ValueError:
+    print("ERROR: CHAT_ID environment variable must be a valid integer.")
+    sys.exit(1)
 
 # --- TWICKETS EVENT URLS ---
 TWICKETS_URLS = [
